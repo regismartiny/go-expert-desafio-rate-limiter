@@ -3,6 +3,7 @@ package configs
 import "github.com/spf13/viper"
 
 type Conf struct {
+	ServerPort    string
 	ReqsPerSecond int
 	TokenConfigs  map[string]int
 }

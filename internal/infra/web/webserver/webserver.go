@@ -13,6 +13,7 @@ import (
 type WebServer struct {
 	Router        chi.Router
 	Handlers      map[string]http.HandlerFunc
+	Middlewares   []func(http.Handler) http.Handler
 	WebServerPort string
 	httpServer    *http.Server
 }
@@ -21,6 +22,7 @@ func NewWebServer(serverPort string) *WebServer {
 	return &WebServer{
 		Router:        chi.NewRouter(),
 		Handlers:      make(map[string]http.HandlerFunc),
+		Middlewares:   make([]func(http.Handler) http.Handler, 0),
 		WebServerPort: serverPort,
 	}
 }
@@ -30,7 +32,7 @@ func (s *WebServer) AddHandler(path string, handler http.HandlerFunc) {
 }
 
 func (s *WebServer) AddMiddleware(handler func(next http.Handler) http.Handler) {
-	s.Router.Use(handler)
+	s.Middlewares = append(s.Middlewares, handler)
 }
 
 // loop through the handlers and add them to the router
@@ -38,6 +40,9 @@ func (s *WebServer) AddMiddleware(handler func(next http.Handler) http.Handler) 
 // start the server
 func (s *WebServer) Start() {
 	s.Router.Use(middleware.Logger)
+	for _, middleware := range s.Middlewares {
+		s.Router.Use(middleware)
+	}
 	for path, handler := range s.Handlers {
 		s.Router.Handle(path, handler)
 	}

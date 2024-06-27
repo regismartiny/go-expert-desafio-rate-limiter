@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/regismartiny/go-expert-desafio-rate-limiter/configs"
+	db "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/infra/database"
 	web "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/infra/web"
 	"github.com/regismartiny/go-expert-desafio-rate-limiter/internal/infra/web/webserver"
 )
@@ -21,11 +22,17 @@ func main() {
 	}
 
 	fmt.Println("Configurations:")
+	fmt.Println("ServerPort:", configs.ServerPort)
 	fmt.Println("ReqsPerSecond:", configs.ReqsPerSecond)
 	fmt.Println("Token Configs:", configs.TokenConfigs)
 
-	webserver := webserver.NewWebServer(":8080")
-	rateLimiterMiddleware := web.NewRateLimiterMiddleware(configs, nil)
+	webserver := webserver.NewWebServer(configs.ServerPort)
+	ratelimiterMiddlewareConfigs := web.RateLimiterMiddlewareConfigs{
+		ReqsPerSecond: configs.ReqsPerSecond,
+		TokenConfigs:  configs.TokenConfigs,
+	}
+	rateLimiterRepository := db.NewRateLimiterRepository(nil)
+	rateLimiterMiddleware := web.NewRateLimiterMiddleware(ratelimiterMiddlewareConfigs, rateLimiterRepository)
 	webserver.AddMiddleware(rateLimiterMiddleware.Handle)
 	homeHandler := web.NewHomeHandler()
 	webserver.AddHandler("/", homeHandler.Handle)
