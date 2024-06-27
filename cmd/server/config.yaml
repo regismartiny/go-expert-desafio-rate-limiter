@@ -1,0 +1,6 @@
+# All key names are converted to lowercase by Viper
+
+reqsPerSecond: 1
+tokenConfigs:
+  - 'abc123': 10
+  - 'abc321': 15

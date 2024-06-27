@@ -9,9 +9,19 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/regismartiny/go-expert-desafio-rate-limiter/configs"
 )
 
 func main() {
+	configs, err := configs.LoadConfig(".")
+	if err != nil {
+		log.Fatalf("Could not load configurations: %v\n", err)
+	}
+
+	fmt.Println("Configurations:")
+	fmt.Println("Rate Limit:", configs.ReqsPerSecond)
+	fmt.Println("Token Configs:", configs.TokenConfigs)
 
 	server := &http.Server{Addr: ":8080"}
 
