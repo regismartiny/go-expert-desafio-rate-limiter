@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/regismartiny/go-expert-desafio-rate-limiter/configs"
+	web "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/infra/web"
+	"github.com/regismartiny/go-expert-desafio-rate-limiter/internal/infra/web/webserver"
 )
 
 func main() {
@@ -20,21 +21,15 @@ func main() {
 	}
 
 	fmt.Println("Configurations:")
-	fmt.Println("Rate Limit:", configs.ReqsPerSecond)
+	fmt.Println("ReqsPerSecond:", configs.ReqsPerSecond)
 	fmt.Println("Token Configs:", configs.TokenConfigs)
 
-	server := &http.Server{Addr: ":8080"}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello World!"))
-	})
-
-	go func() {
-		fmt.Printf("Server is running at http://localhost%s\n", server.Addr)
-		if err := server.ListenAndServe(); err != nil && http.ErrServerClosed != err {
-			log.Fatalf("Could not listen on %s: %v\n", server.Addr, err)
-		}
-	}()
+	webserver := webserver.NewWebServer(":8080")
+	rateLimiterMiddleware := web.NewRateLimiterMiddleware(configs, nil)
+	webserver.AddMiddleware(rateLimiterMiddleware.Handle)
+	homeHandler := web.NewHomeHandler()
+	webserver.AddHandler("/", homeHandler.Handle)
+	webserver.Start()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
@@ -42,10 +37,5 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	fmt.Println("Shutting down server...")
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Could not gracefully shutdown the server: %v\n", err)
-	}
-	fmt.Println("Server stopped")
-
+	webserver.Stop(ctx)
 }

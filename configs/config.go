@@ -2,13 +2,13 @@ package configs
 
 import "github.com/spf13/viper"
 
-type conf struct {
+type Conf struct {
 	ReqsPerSecond int
 	TokenConfigs  map[string]int
 }
 
-func LoadConfig(path string) (*conf, error) {
-	var cfg *conf
+func LoadConfig(path string) (*Conf, error) {
+	var cfg *Conf
 	viper.SetConfigName("app_config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(path)
