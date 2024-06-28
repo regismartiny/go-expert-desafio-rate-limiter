@@ -2,13 +2,17 @@ package configs
 
 import "github.com/spf13/viper"
 
-type Conf struct {
-	ServerPort string
-	Redis      struct {
+type PersistenceConfigs struct {
+	Redis struct {
 		Addr     string
 		Password string
 		Db       int
 	}
+}
+
+type Conf struct {
+	ServerPort    string
+	Persistence   PersistenceConfigs
 	ReqsPerSecond int
 	TokenConfigs  map[string]int
 }

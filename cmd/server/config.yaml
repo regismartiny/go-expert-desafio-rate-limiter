@@ -1,10 +1,11 @@
 # All key names are converted to lowercase by Viper
 
 serverPort: :8080
-redis: 
-  addr: redis:6379
-  password:
-  db: 0
+persistence:
+  redis: 
+    addr: redis:6379
+    password:
+    db: 0
 
 reqsPerSecond: 1
 tokenConfigs:
