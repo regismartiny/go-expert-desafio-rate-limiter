@@ -10,7 +10,7 @@ import (
 
 type RateLimiterMiddleware struct {
 	Configs    RateLimiterMiddlewareConfigs
-	Repository *db.RateLimiterRepository
+	Repository db.RateLimiterRepository
 }
 
 type RateLimiterMiddlewareConfigs struct {
@@ -20,7 +20,7 @@ type RateLimiterMiddlewareConfigs struct {
 
 func NewRateLimiterMiddleware(
 	Configs RateLimiterMiddlewareConfigs,
-	Repository *db.RateLimiterRepository,
+	Repository db.RateLimiterRepository,
 ) *RateLimiterMiddleware {
 	return &RateLimiterMiddleware{
 		Configs:    Configs,
