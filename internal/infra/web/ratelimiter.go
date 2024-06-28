@@ -83,7 +83,7 @@ func (r *RateLimiter) LoadActiveClients() {
 		activeClients = make(map[string]db.ActiveClient)
 	}
 
-	fmt.Printf("%d active clients loaded", len(activeClients))
+	fmt.Printf("%d active clients loaded\n", len(activeClients))
 
 	// populate limiters
 	for k := range activeClients {

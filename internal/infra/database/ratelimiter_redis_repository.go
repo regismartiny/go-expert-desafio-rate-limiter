@@ -21,6 +21,7 @@ func (r *RateLimiterRedisRepository) SaveActiveClients(clients map[string]Active
 
 	value, err := json.Marshal(clients)
 	if err != nil {
+		fmt.Println("Error marshalling clients to JSON", err)
 		return err
 	}
 
@@ -36,23 +37,38 @@ func (r *RateLimiterRedisRepository) SaveActiveClients(clients map[string]Active
 
 func (r *RateLimiterRedisRepository) GetActiveClients() (map[string]ActiveClient, error) {
 
-	activeClients := make(map[string]ActiveClient, 10)
+	activeClients := make(map[string]ActiveClient, 0)
 
-	iter := r.client.Scan(r.ctx, 0, "prefix:*", 0).Iterator()
+	keys := make([]string, 0)
+
+	iter := r.client.Scan(r.ctx, 0, "", 0).Iterator()
 	for iter.Next(r.ctx) {
-		val := iter.Val()
-		fmt.Println("keys", val)
-
-		var activeClient ActiveClient
-		err := json.Unmarshal([]byte(val), &activeClient)
-		if err != nil {
-			return map[string]ActiveClient{}, err
-		}
-
-		activeClients[activeClient.ClientId] = activeClient
+		keys = append(keys, iter.Val())
 	}
 	if err := iter.Err(); err != nil {
 		panic(err)
+	}
+
+	fmt.Println("Keys:", keys)
+
+	for _, key := range keys {
+		value, err := r.client.Get(r.ctx, key).Result()
+		if err == redis.Nil {
+			fmt.Println("Error getting active client from Redis. Key does not exist", key)
+			continue
+		} else if err != nil {
+			fmt.Println("Error getting active client from Redis", err)
+			continue
+		}
+
+		var activeClient map[string]ActiveClient
+		err = json.Unmarshal([]byte(value), &activeClient)
+		if err != nil {
+			fmt.Println("Error unmarshalling active client from Redis", err)
+			continue
+		}
+
+		activeClients[key] = activeClient[key]
 	}
 
 	return activeClients, nil
