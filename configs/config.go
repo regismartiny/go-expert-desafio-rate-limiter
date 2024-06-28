@@ -1,6 +1,10 @@
 package configs
 
-import "github.com/spf13/viper"
+import (
+	"time"
+
+	"github.com/spf13/viper"
+)
 
 type PersistenceConfigs struct {
 	Redis struct {
@@ -11,6 +15,7 @@ type PersistenceConfigs struct {
 }
 
 type RateLimiterConfigs struct {
+	BlockingDuration   time.Duration
 	IpMaxReqsPerSecond int
 	TokenConfigs       map[string]int
 }

@@ -18,18 +18,24 @@ func NewRateLimiterMiddleware(
 	Repository db.RateLimiterRepository,
 ) *RateLimiterMiddleware {
 	return &RateLimiterMiddleware{
-		RateLimiter: &RateLimiter{
-			Configs:    Configs,
-			Repository: Repository,
-		},
+		RateLimiter: NewRateLimiter(
+			RateLimiterConfigs{
+				BlockingDuration:   Configs.BlockingDuration,
+				IpMaxReqsPerSecond: Configs.IpMaxReqsPerSecond,
+				TokenConfigs:       Configs.TokenConfigs},
+			Repository),
 	}
 }
 
 func (h *RateLimiterMiddleware) Handle(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		ipAddr := getIP(r)
 		apiKeyHeader := r.Header.Get("API_KEY")
+		ipAddr, err := getIP(r)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		fmt.Println("ipAddr", ipAddr)
 		fmt.Println("apiKeyHeader", apiKeyHeader)
@@ -40,22 +46,23 @@ func (h *RateLimiterMiddleware) Handle(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		} else {
 			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte("Rate limit exceeded"))
+			w.Write([]byte("you have reached the maximum number of requests or actions allowed within a certain time frame"))
 		}
 	})
 }
 
-func getIP(req *http.Request) string {
+func getIP(req *http.Request) (string, error) {
 	ip, port, err := net.SplitHostPort(req.RemoteAddr)
 	if err != nil {
 		fmt.Printf("userip: %q is not IP:port\n", req.RemoteAddr)
+		return "", err
 	}
 
 	userIP := net.ParseIP(ip)
 	if userIP == nil {
 		//return nil, fmt.Errorf("userip: %q is not IP:port", req.RemoteAddr)
 		fmt.Printf("userip: %q is not IP:port\n", req.RemoteAddr)
-		return ""
+		return "", err
 	}
 
 	// This will only be defined when site is accessed via non-anonymous proxy
@@ -67,5 +74,5 @@ func getIP(req *http.Request) string {
 	fmt.Printf("Port: %s\n", port)
 	fmt.Printf("Forwarded for: %s\n", forward)
 
-	return ip
+	return ip, nil
 }

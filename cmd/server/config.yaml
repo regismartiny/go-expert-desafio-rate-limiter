@@ -8,8 +8,9 @@ persistence:
     db: 0
 
 rateLimiter:
+  blockingDuration: 30s
   ipMaxReqsPerSecond: 2
   tokenConfigs:
   # token: maxReqsPerSecond
-    - 'abc123': 10
-    - 'abc321': 15
+    - 'abc123': 2
+    - 'abc321': 3

@@ -2,9 +2,8 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"strconv"
-	"time"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -18,30 +17,43 @@ func NewRateLimiterRedisRepository(ctx context.Context, client *redis.Client) *R
 	return &RateLimiterRedisRepository{ctx: ctx, client: client}
 }
 
-func (r *RateLimiterRedisRepository) SaveRequestCount(key string, value int) error {
+func (r *RateLimiterRedisRepository) SaveActiveClients(clients map[string]ActiveClient) error {
 
-	err := r.client.Set(r.ctx, key, value, time.Second*1).Err()
-
+	value, err := json.Marshal(clients)
 	if err != nil {
-		fmt.Println("Error saving reqCount to Redis", err)
+		return err
+	}
+
+	for _, client := range clients {
+		err = r.client.Set(r.ctx, client.ClientId, value, 0).Err()
+		if err != nil {
+			fmt.Println("Error saving active client to Redis", err)
+		}
 	}
 
 	return err
 }
 
-func (r *RateLimiterRedisRepository) GetRequestCount(key string) (int, error) {
+func (r *RateLimiterRedisRepository) GetActiveClients() (map[string]ActiveClient, error) {
 
-	reqCountStr, _ := r.client.Get(r.ctx, key).Result()
+	activeClients := make(map[string]ActiveClient, 10)
 
-	if reqCountStr == "" {
-		return 0, nil
+	iter := r.client.Scan(r.ctx, 0, "prefix:*", 0).Iterator()
+	for iter.Next(r.ctx) {
+		val := iter.Val()
+		fmt.Println("keys", val)
+
+		var activeClient ActiveClient
+		err := json.Unmarshal([]byte(val), &activeClient)
+		if err != nil {
+			return map[string]ActiveClient{}, err
+		}
+
+		activeClients[activeClient.ClientId] = activeClient
+	}
+	if err := iter.Err(); err != nil {
+		panic(err)
 	}
 
-	reqCount, err := strconv.Atoi(reqCountStr)
-	if err != nil {
-		fmt.Println("Error converting reqCount to integer", err)
-		return 0, err
-	}
-
-	return reqCount, nil
+	return activeClients, nil
 }
