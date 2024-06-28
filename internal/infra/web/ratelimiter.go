@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	entity "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/entity"
 	db "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/infra/database"
 	"golang.org/x/time/rate"
 )
@@ -23,7 +24,7 @@ type RateLimiter struct {
 
 type ActiveClients struct {
 	mu      sync.Mutex
-	clients map[string]db.ActiveClient
+	clients map[string]entity.ActiveClient
 }
 
 func NewRateLimiter(
@@ -34,7 +35,7 @@ func NewRateLimiter(
 		Configs:    Configs,
 		Repository: Repository,
 		activeClients: ActiveClients{
-			clients: make(map[string]db.ActiveClient)}}
+			clients: make(map[string]entity.ActiveClient)}}
 
 	rateLimiter.LoadActiveClients()
 
@@ -80,7 +81,7 @@ func (r *RateLimiter) LoadActiveClients() {
 	activeClients, err := r.Repository.GetActiveClients()
 	if err != nil {
 		fmt.Println("Error loading active clients. Starting clean.", err)
-		activeClients = make(map[string]db.ActiveClient)
+		activeClients = make(map[string]entity.ActiveClient)
 	}
 
 	fmt.Printf("%d active clients loaded\n", len(activeClients))
@@ -90,7 +91,7 @@ func (r *RateLimiter) LoadActiveClients() {
 		activeClient := activeClients[k]
 		var maxReqsPerSecond int
 
-		if activeClient.ClientType == db.Ip {
+		if activeClient.ClientType == entity.Ip {
 			maxReqsPerSecond = r.Configs.IpMaxReqsPerSecond
 		} else {
 			tokenConfig, ok := r.Configs.TokenConfigs[activeClient.ClientId]
@@ -120,7 +121,7 @@ func (r *RateLimiter) SaveActiveClients() {
 	}
 }
 
-func (r *RateLimiter) AddActiveClient(client db.ActiveClient) {
+func (r *RateLimiter) AddActiveClient(client entity.ActiveClient) {
 
 	r.activeClients.mu.Lock()
 	r.activeClients.clients[client.ClientId] = client
@@ -129,7 +130,7 @@ func (r *RateLimiter) AddActiveClient(client db.ActiveClient) {
 	r.SaveActiveClients()
 }
 
-func (r *RateLimiter) RemoveActiveClient(client db.ActiveClient) {
+func (r *RateLimiter) RemoveActiveClient(client entity.ActiveClient) {
 
 	r.activeClients.mu.Lock()
 	delete(r.activeClients.clients, client.ClientId)
@@ -138,7 +139,7 @@ func (r *RateLimiter) RemoveActiveClient(client db.ActiveClient) {
 	r.SaveActiveClients()
 }
 
-func (r *RateLimiter) UpdateActiveClient(key string, client db.ActiveClient) {
+func (r *RateLimiter) UpdateActiveClient(key string, client entity.ActiveClient) {
 
 	r.activeClients.mu.Lock()
 	r.activeClients.clients[key] = client
@@ -158,10 +159,10 @@ func (r *RateLimiter) Allow(ipAddr string, apiKeyHeader string) bool {
 			activeClient, ok := r.activeClients.clients[apiKeyHeader]
 
 			if !ok {
-				activeClient = db.ActiveClient{
+				activeClient = entity.ActiveClient{
 					ClientId:     apiKeyHeader,
 					LastSeen:     time.Now(),
-					ClientType:   db.Token,
+					ClientType:   entity.Token,
 					BlockedUntil: time.Time{},
 					Blocked:      false,
 					Limiter:      getRateLimiter(tokenMaxReqsPerSecond),
@@ -199,10 +200,10 @@ func (r *RateLimiter) Allow(ipAddr string, apiKeyHeader string) bool {
 	activeClient, ok := r.activeClients.clients[ipAddr]
 
 	if !ok {
-		activeClient = db.ActiveClient{
+		activeClient = entity.ActiveClient{
 			ClientId:     ipAddr,
 			LastSeen:     time.Now(),
-			ClientType:   db.Ip,
+			ClientType:   entity.Ip,
 			BlockedUntil: time.Time{},
 			Blocked:      false,
 			Limiter:      getRateLimiter(ipMaxReqsPerSecond),

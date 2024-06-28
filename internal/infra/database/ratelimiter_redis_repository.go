@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/go-redis/redis/v8"
+	entity "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/entity"
 )
 
 type RateLimiterRedisRepository struct {
@@ -17,7 +18,7 @@ func NewRateLimiterRedisRepository(ctx context.Context, client *redis.Client) *R
 	return &RateLimiterRedisRepository{ctx: ctx, client: client}
 }
 
-func (r *RateLimiterRedisRepository) SaveActiveClients(clients map[string]ActiveClient) error {
+func (r *RateLimiterRedisRepository) SaveActiveClients(clients map[string]entity.ActiveClient) error {
 
 	value, err := json.Marshal(clients)
 	if err != nil {
@@ -35,9 +36,9 @@ func (r *RateLimiterRedisRepository) SaveActiveClients(clients map[string]Active
 	return err
 }
 
-func (r *RateLimiterRedisRepository) GetActiveClients() (map[string]ActiveClient, error) {
+func (r *RateLimiterRedisRepository) GetActiveClients() (map[string]entity.ActiveClient, error) {
 
-	activeClients := make(map[string]ActiveClient, 0)
+	activeClients := make(map[string]entity.ActiveClient, 0)
 
 	keys := make([]string, 0)
 
@@ -61,7 +62,7 @@ func (r *RateLimiterRedisRepository) GetActiveClients() (map[string]ActiveClient
 			continue
 		}
 
-		var activeClient map[string]ActiveClient
+		var activeClient map[string]entity.ActiveClient
 		err = json.Unmarshal([]byte(value), &activeClient)
 		if err != nil {
 			fmt.Println("Error unmarshalling active client from Redis", err)
