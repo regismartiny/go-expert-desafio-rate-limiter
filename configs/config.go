@@ -10,11 +10,15 @@ type PersistenceConfigs struct {
 	}
 }
 
+type RateLimiterConfigs struct {
+	IpMaxReqsPerSecond int
+	TokenConfigs       map[string]int
+}
+
 type Conf struct {
-	ServerPort    string
-	Persistence   PersistenceConfigs
-	ReqsPerSecond int
-	TokenConfigs  map[string]int
+	ServerPort  string
+	Persistence PersistenceConfigs
+	RateLimiter RateLimiterConfigs
 }
 
 func LoadConfig(path string) (*Conf, error) {

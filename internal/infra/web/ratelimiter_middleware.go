@@ -5,34 +5,28 @@ import (
 	"net"
 	"net/http"
 
+	configs "github.com/regismartiny/go-expert-desafio-rate-limiter/configs"
 	db "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/infra/database"
 )
 
 type RateLimiterMiddleware struct {
-	Configs    RateLimiterMiddlewareConfigs
-	Repository db.RateLimiterRepository
-}
-
-type RateLimiterMiddlewareConfigs struct {
-	ReqsPerSecond int
-	TokenConfigs  map[string]int
+	RateLimiter *RateLimiter
 }
 
 func NewRateLimiterMiddleware(
-	Configs RateLimiterMiddlewareConfigs,
+	Configs configs.RateLimiterConfigs,
 	Repository db.RateLimiterRepository,
 ) *RateLimiterMiddleware {
 	return &RateLimiterMiddleware{
-		Configs:    Configs,
-		Repository: Repository,
+		RateLimiter: &RateLimiter{
+			Configs:    Configs,
+			Repository: Repository,
+		},
 	}
 }
 
 func (h *RateLimiterMiddleware) Handle(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implementar o rate limiter
-		fmt.Println("Passou pelo rate limiter middleware")
-		w.Write([]byte("Passou pelo rate limiter middleware\n"))
 
 		ipAddr := getIP(r)
 		apiKeyHeader := r.Header.Get("API_KEY")
@@ -40,22 +34,14 @@ func (h *RateLimiterMiddleware) Handle(next http.Handler) http.Handler {
 		fmt.Println("ipAddr", ipAddr)
 		fmt.Println("apiKeyHeader", apiKeyHeader)
 
-		ipAddrRequestCount, err := h.Repository.GetRequestCount(ipAddr)
-		if err != nil {
-			fmt.Println(err)
+		allow := h.RateLimiter.Allow(ipAddr, apiKeyHeader)
+
+		if allow {
+			next.ServeHTTP(w, r)
+		} else {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte("Rate limit exceeded"))
 		}
-
-		newIpAddrRequestCount := ipAddrRequestCount + 1
-
-		h.Repository.SaveRequestCount(ipAddr, newIpAddrRequestCount)
-
-		fmt.Println("ipAddrRequestCount", newIpAddrRequestCount)
-
-		maxReqsPerSecond := h.Configs.ReqsPerSecond
-
-		fmt.Println("maxReqsPerSecond", maxReqsPerSecond)
-
-		next.ServeHTTP(w, r)
 	})
 }
 

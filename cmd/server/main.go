@@ -24,18 +24,13 @@ func main() {
 
 	fmt.Println("Configurations:")
 	fmt.Println("ServerPort:", configs.ServerPort)
-	fmt.Println("ReqsPerSecond:", configs.ReqsPerSecond)
-	fmt.Println("Token Configs:", configs.TokenConfigs)
-	fmt.Println("Persistence Configs:", configs.Persistence)
+	fmt.Println("RateLimiter:", configs.RateLimiter)
+	fmt.Println("Persistence:", configs.Persistence)
 
 	webserver := webserver.NewWebServer(configs.ServerPort)
-	ratelimiterMiddlewareConfigs := web.RateLimiterMiddlewareConfigs{
-		ReqsPerSecond: configs.ReqsPerSecond,
-		TokenConfigs:  configs.TokenConfigs,
-	}
 
 	rateLimiterRepository := db.RateLimiterRepositoryStrategy(ctx, configs.Persistence, "redis")
-	rateLimiterMiddleware := web.NewRateLimiterMiddleware(ratelimiterMiddlewareConfigs, rateLimiterRepository)
+	rateLimiterMiddleware := web.NewRateLimiterMiddleware(configs.RateLimiter, rateLimiterRepository)
 	webserver.AddMiddleware(rateLimiterMiddleware.Handle)
 	homeHandler := web.NewHomeHandler()
 	webserver.AddHandler("/", homeHandler.Handle)

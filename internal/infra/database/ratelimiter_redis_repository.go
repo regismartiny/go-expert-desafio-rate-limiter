@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 )
@@ -19,7 +20,7 @@ func NewRateLimiterRedisRepository(ctx context.Context, client *redis.Client) *R
 
 func (r *RateLimiterRedisRepository) SaveRequestCount(key string, value int) error {
 
-	err := r.client.Set(r.ctx, key, value, 0).Err()
+	err := r.client.Set(r.ctx, key, value, time.Second*1).Err()
 
 	if err != nil {
 		fmt.Println("Error saving reqCount to Redis", err)
@@ -30,9 +31,10 @@ func (r *RateLimiterRedisRepository) SaveRequestCount(key string, value int) err
 
 func (r *RateLimiterRedisRepository) GetRequestCount(key string) (int, error) {
 
-	reqCountStr, err := r.client.Get(r.ctx, key).Result()
-	if err != nil {
-		fmt.Println("Error getting reqCount from Redis", err)
+	reqCountStr, _ := r.client.Get(r.ctx, key).Result()
+
+	if reqCountStr == "" {
+		return 0, nil
 	}
 
 	reqCount, err := strconv.Atoi(reqCountStr)

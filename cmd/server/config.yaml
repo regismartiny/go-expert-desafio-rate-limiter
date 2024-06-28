@@ -7,7 +7,9 @@ persistence:
     password:
     db: 0
 
-reqsPerSecond: 1
-tokenConfigs:
-  - 'abc123': 10
-  - 'abc321': 15
+rateLimiter:
+  ipMaxReqsPerSecond: 2
+  tokenConfigs:
+  # token: maxReqsPerSecond
+    - 'abc123': 10
+    - 'abc321': 15
