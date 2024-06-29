@@ -1,4 +1,4 @@
-package web
+package ratelimiter
 
 import (
 	"fmt"
@@ -37,7 +37,7 @@ func NewRateLimiter(
 		activeClients: ActiveClients{
 			clients: make(map[string]entity.ActiveClient)}}
 
-	rateLimiter.LoadActiveClients()
+	rateLimiter.loadActiveClients()
 
 	// Unblock client after expiration time
 	go func() {
@@ -51,13 +51,13 @@ func NewRateLimiter(
 				if v.Blocked && now.After(v.BlockedUntil) {
 					client.Blocked = false
 					client.BlockedUntil = time.Time{}
-					rateLimiter.UpdateActiveClient(k, client)
+					rateLimiter.updateActiveClient(k, client)
 				}
 			}
 		}
 	}()
 
-	// Clean inactive clients
+	// Remove inactive clients
 	go func() {
 		for {
 			time.Sleep(3 * time.Minute)
@@ -65,7 +65,7 @@ func NewRateLimiter(
 			for k := range rateLimiter.activeClients.clients {
 				client := rateLimiter.activeClients.clients[k]
 				if time.Since(client.LastSeen) > 3*time.Minute {
-					rateLimiter.RemoveActiveClient(client)
+					rateLimiter.removeActiveClient(client)
 				}
 			}
 		}
@@ -74,7 +74,7 @@ func NewRateLimiter(
 	return rateLimiter
 }
 
-func (r *RateLimiter) LoadActiveClients() {
+func (r *RateLimiter) loadActiveClients() {
 
 	fmt.Println("Loading active clients...")
 
@@ -89,16 +89,13 @@ func (r *RateLimiter) LoadActiveClients() {
 	// populate limiters
 	for k := range activeClients {
 		activeClient := activeClients[k]
-		var maxReqsPerSecond int
+		maxReqsPerSecond := 0
 
 		if activeClient.ClientType == entity.Ip {
 			maxReqsPerSecond = r.Configs.IpMaxReqsPerSecond
 		} else {
-			tokenConfig, ok := r.Configs.TokenConfigs[activeClient.ClientId]
-			if ok {
+			if tokenConfig, ok := r.Configs.TokenConfigs[activeClient.ClientId]; ok {
 				maxReqsPerSecond = tokenConfig
-			} else {
-				maxReqsPerSecond = 0
 			}
 		}
 
@@ -113,7 +110,7 @@ func (r *RateLimiter) LoadActiveClients() {
 	r.activeClients.mu.Unlock()
 }
 
-func (r *RateLimiter) SaveActiveClients() {
+func (r *RateLimiter) saveActiveClients() {
 
 	err := r.Repository.SaveActiveClients(r.activeClients.clients)
 	if err != nil {
@@ -121,95 +118,57 @@ func (r *RateLimiter) SaveActiveClients() {
 	}
 }
 
-func (r *RateLimiter) AddActiveClient(client entity.ActiveClient) {
+func (r *RateLimiter) addActiveClient(client entity.ActiveClient) {
 
 	r.activeClients.mu.Lock()
 	r.activeClients.clients[client.ClientId] = client
 	r.activeClients.mu.Unlock()
 
-	r.SaveActiveClients()
+	r.saveActiveClients()
 }
 
-func (r *RateLimiter) RemoveActiveClient(client entity.ActiveClient) {
+func (r *RateLimiter) removeActiveClient(client entity.ActiveClient) {
 
 	r.activeClients.mu.Lock()
 	delete(r.activeClients.clients, client.ClientId)
 	r.activeClients.mu.Unlock()
 
-	r.SaveActiveClients()
+	r.saveActiveClients()
 }
 
-func (r *RateLimiter) UpdateActiveClient(key string, client entity.ActiveClient) {
+func (r *RateLimiter) updateActiveClient(key string, client entity.ActiveClient) {
 
 	r.activeClients.mu.Lock()
 	r.activeClients.clients[key] = client
 	r.activeClients.mu.Unlock()
 
-	r.SaveActiveClients()
+	r.saveActiveClients()
 }
 
 func (r *RateLimiter) Allow(ipAddr string, apiKeyHeader string) bool {
 
 	if apiKeyHeader != "" {
+
 		tokenMaxReqsPerSecond, ok := r.Configs.TokenConfigs[apiKeyHeader]
 		if ok {
 
 			fmt.Println("tokenMaxReqsPerSecond", tokenMaxReqsPerSecond)
-
-			activeClient, ok := r.activeClients.clients[apiKeyHeader]
-
-			if !ok {
-				activeClient = entity.ActiveClient{
-					ClientId:     apiKeyHeader,
-					LastSeen:     time.Now(),
-					ClientType:   entity.Token,
-					BlockedUntil: time.Time{},
-					Blocked:      false,
-					Limiter:      getRateLimiter(tokenMaxReqsPerSecond),
-				}
-
-				r.AddActiveClient(activeClient)
-				return true
-			}
-
-			activeClient.LastSeen = time.Now()
-
-			if activeClient.Blocked {
-				fmt.Println("Client is blocked until", activeClient.BlockedUntil)
-				r.UpdateActiveClient(activeClient.ClientId, activeClient)
-				return false
-			}
-
-			allow := activeClient.Limiter.Allow()
-
-			if !allow {
-				activeClient.Blocked = true
-				activeClient.BlockedUntil = time.Now().Add(r.Configs.BlockingDuration)
-				fmt.Printf("Blocking client %s until %s\n", activeClient.ClientId, activeClient.BlockedUntil)
-			}
-
-			r.UpdateActiveClient(activeClient.ClientId, activeClient)
-
-			return allow
+			return r.verifyClientAllowed(apiKeyHeader, entity.Token, tokenMaxReqsPerSecond)
 		}
 	}
 
 	ipMaxReqsPerSecond := r.Configs.IpMaxReqsPerSecond
 	fmt.Println("ipMaxReqsPerSecond", ipMaxReqsPerSecond)
+	return r.verifyClientAllowed(ipAddr, entity.Ip, ipMaxReqsPerSecond)
+}
 
-	activeClient, ok := r.activeClients.clients[ipAddr]
+func (r *RateLimiter) verifyClientAllowed(id string, clientType entity.ClientType, maxReqsPerSecond int) bool {
 
-	if !ok {
-		activeClient = entity.ActiveClient{
-			ClientId:     ipAddr,
-			LastSeen:     time.Now(),
-			ClientType:   entity.Ip,
-			BlockedUntil: time.Time{},
-			Blocked:      false,
-			Limiter:      getRateLimiter(ipMaxReqsPerSecond),
-		}
+	activeClient, exists := r.activeClients.clients[id]
 
-		r.AddActiveClient(activeClient)
+	if !exists {
+		activeClient = createActiveClient(id, clientType, maxReqsPerSecond)
+		r.addActiveClient(activeClient)
 		return true
 	}
 
@@ -217,7 +176,7 @@ func (r *RateLimiter) Allow(ipAddr string, apiKeyHeader string) bool {
 
 	if activeClient.Blocked {
 		fmt.Println("Client is blocked until", activeClient.BlockedUntil)
-		r.UpdateActiveClient(activeClient.ClientId, activeClient)
+		r.updateActiveClient(activeClient.ClientId, activeClient)
 		return false
 	}
 
@@ -229,9 +188,20 @@ func (r *RateLimiter) Allow(ipAddr string, apiKeyHeader string) bool {
 		fmt.Printf("Blocking client %s until %s\n", activeClient.ClientId, activeClient.BlockedUntil)
 	}
 
-	r.UpdateActiveClient(activeClient.ClientId, activeClient)
+	r.updateActiveClient(activeClient.ClientId, activeClient)
 
 	return allow
+}
+
+func createActiveClient(id string, clientType entity.ClientType, maxReqsPerSeconds int) entity.ActiveClient {
+	return entity.ActiveClient{
+		ClientId:     id,
+		LastSeen:     time.Now(),
+		ClientType:   clientType,
+		BlockedUntil: time.Time{},
+		Blocked:      false,
+		Limiter:      getRateLimiter(maxReqsPerSeconds),
+	}
 }
 
 func getRateLimiter(maxReqsPerSecond int) *rate.Limiter {

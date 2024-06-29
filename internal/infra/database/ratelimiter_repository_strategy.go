@@ -8,9 +8,9 @@ import (
 	config "github.com/regismartiny/go-expert-desafio-rate-limiter/configs"
 )
 
-func RateLimiterRepositoryStrategy(ctx context.Context, configs config.PersistenceConfigs, clientType string) RateLimiterRepository {
+func RateLimiterRepositoryStrategy(ctx context.Context, configs config.PersistenceConfigs, database string) RateLimiterRepository {
 	var repository RateLimiterRepository
-	switch clientType {
+	switch database {
 	case "redis":
 		repository = NewRateLimiterRedisRepository(ctx, getRedisClient(ctx, configs))
 	default:
@@ -30,7 +30,7 @@ func getRedisClient(ctx context.Context, configs config.PersistenceConfigs) *red
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(pong)
+	fmt.Println("Redis connected", pong)
 
 	return redisClient
 }

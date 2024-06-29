@@ -7,10 +7,11 @@ import (
 
 	configs "github.com/regismartiny/go-expert-desafio-rate-limiter/configs"
 	db "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/infra/database"
+	rateLimiter "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/ratelimiter"
 )
 
 type RateLimiterMiddleware struct {
-	RateLimiter *RateLimiter
+	RateLimiter *rateLimiter.RateLimiter
 }
 
 func NewRateLimiterMiddleware(
@@ -18,8 +19,8 @@ func NewRateLimiterMiddleware(
 	Repository db.RateLimiterRepository,
 ) *RateLimiterMiddleware {
 	return &RateLimiterMiddleware{
-		RateLimiter: NewRateLimiter(
-			RateLimiterConfigs{
+		RateLimiter: rateLimiter.NewRateLimiter(
+			rateLimiter.RateLimiterConfigs{
 				BlockingDuration:   Configs.BlockingDuration,
 				IpMaxReqsPerSecond: Configs.IpMaxReqsPerSecond,
 				TokenConfigs:       Configs.TokenConfigs},
