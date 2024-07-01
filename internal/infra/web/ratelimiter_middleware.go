@@ -1,7 +1,9 @@
 package web
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 
@@ -15,11 +17,13 @@ type RateLimiterMiddleware struct {
 }
 
 func NewRateLimiterMiddleware(
+	Ctx context.Context,
 	Configs configs.RateLimiterConfigs,
 	Repository db.RateLimiterRepository,
 ) *RateLimiterMiddleware {
 	return &RateLimiterMiddleware{
 		RateLimiter: rateLimiter.NewRateLimiter(
+			Ctx,
 			rateLimiter.RateLimiterConfigs{
 				BlockingDuration:   Configs.BlockingDuration,
 				IpMaxReqsPerSecond: Configs.IpMaxReqsPerSecond,
@@ -38,8 +42,8 @@ func (h *RateLimiterMiddleware) Handle(next http.Handler) http.Handler {
 			return
 		}
 
-		fmt.Println("ipAddr", ipAddr)
-		fmt.Println("apiKeyHeader", apiKeyHeader)
+		log.Println("ipAddr", ipAddr)
+		log.Println("apiKeyHeader", apiKeyHeader)
 
 		allow := h.RateLimiter.Allow(ipAddr, apiKeyHeader)
 
@@ -55,15 +59,14 @@ func (h *RateLimiterMiddleware) Handle(next http.Handler) http.Handler {
 func getIP(req *http.Request) (string, error) {
 	ip, port, err := net.SplitHostPort(req.RemoteAddr)
 	if err != nil {
-		fmt.Printf("userip: %q is not IP:port\n", req.RemoteAddr)
+		log.Printf("userip: %q is not IP:port\n", req.RemoteAddr)
 		return "", err
 	}
 
 	userIP := net.ParseIP(ip)
 	if userIP == nil {
-		//return nil, fmt.Errorf("userip: %q is not IP:port", req.RemoteAddr)
-		fmt.Printf("userip: %q is not IP:port\n", req.RemoteAddr)
-		return "", err
+		log.Printf("userip: %q is not IP:port\n", req.RemoteAddr)
+		return "", fmt.Errorf("userip: %q is not IP:port", req.RemoteAddr)
 	}
 
 	// This will only be defined when site is accessed via non-anonymous proxy
@@ -71,9 +74,9 @@ func getIP(req *http.Request) (string, error) {
 	// Header.Get is case-insensitive
 	forward := req.Header.Get("X-Forwarded-For")
 
-	fmt.Printf("IP: %s\n", ip)
-	fmt.Printf("Port: %s\n", port)
-	fmt.Printf("Forwarded for: %s\n", forward)
+	log.Printf("IP: %s\n", ip)
+	log.Printf("Port: %s\n", port)
+	log.Printf("Forwarded for: %s\n", forward)
 
 	return ip, nil
 }

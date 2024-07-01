@@ -3,7 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"log"
 
 	"github.com/go-redis/redis/v8"
 	config "github.com/regismartiny/go-expert-desafio-rate-limiter/configs"
@@ -33,7 +33,7 @@ func getRedisClient(ctx context.Context, configs config.PersistenceConfigs) *red
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("Redis connected", pong)
+	log.Println("Redis connected", pong)
 
 	return redisClient
 }

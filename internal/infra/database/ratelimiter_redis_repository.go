@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/go-redis/redis/v8"
 	entity "github.com/regismartiny/go-expert-desafio-rate-limiter/internal/entity"
@@ -50,22 +51,20 @@ func (r *RateLimiterRedisRepository) GetActiveClients() (map[string]entity.Activ
 		panic(err)
 	}
 
-	fmt.Println("Keys:", keys)
-
 	for _, key := range keys {
 		value, err := r.client.Get(r.ctx, key).Result()
 		if err == redis.Nil {
-			fmt.Println("Error getting active client from Redis. Key does not exist", key)
+			log.Println("Error getting active client from Redis. Key does not exist", key)
 			continue
 		} else if err != nil {
-			fmt.Println("Error getting active client from Redis", err)
+			log.Println("Error getting active client from Redis", err)
 			continue
 		}
 
 		var activeClient map[string]entity.ActiveClient
 		err = json.Unmarshal([]byte(value), &activeClient)
 		if err != nil {
-			fmt.Println("Error unmarshalling active client from Redis", err)
+			log.Println("Error unmarshalling active client from Redis", err)
 			continue
 		}
 

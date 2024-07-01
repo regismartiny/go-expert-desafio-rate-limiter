@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -22,15 +21,15 @@ func main() {
 		log.Fatalf("Could not load configurations: %v\n", err)
 	}
 
-	fmt.Println("Configurations:")
-	fmt.Println("ServerPort:", configs.ServerPort)
-	fmt.Println("RateLimiter:", configs.RateLimiter)
-	fmt.Println("Persistence:", configs.Persistence)
+	log.Println("Configurations:")
+	log.Println("ServerPort:", configs.ServerPort)
+	log.Println("RateLimiter:", configs.RateLimiter)
+	log.Println("Persistence:", configs.Persistence)
 
 	webserver := webserver.NewWebServer(configs.ServerPort)
 
 	rateLimiterRepository := db.RateLimiterRepositoryStrategy(ctx, configs.Persistence, "redis")
-	rateLimiterMiddleware := web.NewRateLimiterMiddleware(configs.RateLimiter, rateLimiterRepository)
+	rateLimiterMiddleware := web.NewRateLimiterMiddleware(ctx, configs.RateLimiter, rateLimiterRepository)
 	webserver.AddMiddleware(rateLimiterMiddleware.Handle)
 	homeHandler := web.NewHomeHandler()
 	webserver.AddHandler("/", homeHandler.Handle)

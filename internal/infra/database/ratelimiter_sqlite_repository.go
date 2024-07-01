@@ -16,7 +16,6 @@ type RateLimiterSQLiteRepository struct {
 }
 
 func NewRateLimiterSQLiteRepository(ctx context.Context, client *sql.DB) *RateLimiterSQLiteRepository {
-	client.Exec("CREATE TABLE ActiveClient (ClientId TEXT NOT NULL, LastSeen DATETIME NOT NULL, ClientType INTEGER NOT NULL, BlockedUntil DATETIME, Blocked BOOLEAN NOT NULL);")
 	return &RateLimiterSQLiteRepository{ctx: ctx, client: client}
 }
 
@@ -24,7 +23,7 @@ func (r *RateLimiterSQLiteRepository) SaveActiveClients(clients map[string]entit
 
 	for _, client := range clients {
 
-		_, err := r.client.Exec("INSERT INTO ActiveClient (ClientId, LastSeen, ClientType, BlockedUntil, Blocked) VALUES (?, ?, ?, ?, ?)",
+		_, err := r.client.Exec("INSERT INTO active_client (ClientId, LastSeen, ClientType, BlockedUntil, Blocked) VALUES (?, ?, ?, ?, ?)",
 			client.ClientId, client.LastSeen, client.ClientType, client.BlockedUntil, client.Blocked)
 		if err != nil {
 			return err
@@ -37,9 +36,9 @@ func (r *RateLimiterSQLiteRepository) GetActiveClients() (map[string]entity.Acti
 
 	activeClients := make(map[string]entity.ActiveClient, 0)
 
-	rows, err := r.client.Query("SELECT ClientId, LastSeen, ClientType, BlockedUntil, Blocked FROM ActiveClient")
+	rows, err := r.client.Query("SELECT ClientId, LastSeen, ClientType, BlockedUntil, Blocked FROM active_client")
 	if err != nil {
-		return nil, err
+		return activeClients, err
 	}
 
 	for rows.Next() {
@@ -51,7 +50,7 @@ func (r *RateLimiterSQLiteRepository) GetActiveClients() (map[string]entity.Acti
 
 		err = rows.Scan(&clientId, &lastSeen, &clientType, &blockedUntil, &blocked)
 		if err != nil {
-			return nil, err
+			return activeClients, err
 		}
 		activeClients[clientId] = entity.ActiveClient{
 			ClientId:     clientId,

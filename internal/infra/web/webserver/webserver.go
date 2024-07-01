@@ -2,7 +2,6 @@ package webserver
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -49,7 +48,7 @@ func (s *WebServer) Start() {
 	server := &http.Server{Addr: s.WebServerPort, Handler: s.Router}
 	s.httpServer = server
 	go func() {
-		fmt.Printf("Server is running at http://localhost%s\n", server.Addr)
+		log.Printf("Server is running at http://localhost%s\n", server.Addr)
 		if err := server.ListenAndServe(); err != nil && http.ErrServerClosed != err {
 			log.Fatalf("Could not listen on %s: %v\n", server.Addr, err)
 		}
@@ -57,9 +56,9 @@ func (s *WebServer) Start() {
 }
 
 func (s *WebServer) Stop(ctx context.Context) {
-	fmt.Println("Shutting down server...")
+	log.Println("Shutting down server...")
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		log.Fatalf("Could not gracefully shutdown the server: %v\n", err)
 	}
-	fmt.Println("Server stopped")
+	log.Println("Server stopped")
 }

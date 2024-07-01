@@ -1,7 +1,8 @@
 package ratelimiter
 
 import (
-	"fmt"
+	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ type RateLimiterConfigs struct {
 }
 
 type RateLimiter struct {
+	ctx           context.Context
 	Configs       RateLimiterConfigs
 	Repository    db.RateLimiterRepository
 	activeClients ActiveClients
@@ -28,10 +30,12 @@ type ActiveClients struct {
 }
 
 func NewRateLimiter(
+	ctx context.Context,
 	Configs RateLimiterConfigs,
 	Repository db.RateLimiterRepository) *RateLimiter {
 
 	rateLimiter := &RateLimiter{
+		ctx:        ctx,
 		Configs:    Configs,
 		Repository: Repository,
 		activeClients: ActiveClients{
@@ -42,30 +46,65 @@ func NewRateLimiter(
 	// Unblock client after expiration time
 	go func() {
 		for {
-			time.Sleep(1 * time.Second)
-
-			now := time.Now()
-
-			for k, v := range rateLimiter.activeClients.clients {
-				client := rateLimiter.activeClients.clients[k]
-				if v.Blocked && now.After(v.BlockedUntil) {
-					client.Blocked = false
-					client.BlockedUntil = time.Time{}
-					rateLimiter.updateActiveClient(k, client)
+			select {
+			case <-ctx.Done():
+				{
+					log.Println("Stopped expired blockings manager...")
+					return
 				}
+			default:
+				{
+					time.Sleep(1 * time.Second)
+
+					now := time.Now()
+
+					clientsToUnblock := make([]string, 0)
+
+					rateLimiter.activeClients.mu.Lock()
+					for k, v := range rateLimiter.activeClients.clients {
+						if v.Blocked && now.After(v.BlockedUntil) {
+							clientsToUnblock = append(clientsToUnblock, k)
+						}
+					}
+					rateLimiter.activeClients.mu.Unlock()
+
+					for _, v := range clientsToUnblock {
+						rateLimiter.unblockActiveClient(v)
+					}
+				}
+
 			}
+
 		}
 	}()
 
 	// Remove inactive clients
 	go func() {
 		for {
-			time.Sleep(3 * time.Minute)
+			select {
+			case <-ctx.Done():
+				{
+					log.Println("Stopped inactive clients manager...")
+					return
+				}
+			default:
+				{
+					time.Sleep(3 * time.Minute)
 
-			for k := range rateLimiter.activeClients.clients {
-				client := rateLimiter.activeClients.clients[k]
-				if time.Since(client.LastSeen) > 3*time.Minute {
-					rateLimiter.removeActiveClient(client)
+					clientsToRemove := make([]entity.ActiveClient, 0)
+
+					rateLimiter.activeClients.mu.Lock()
+					for k := range rateLimiter.activeClients.clients {
+						client := rateLimiter.activeClients.clients[k]
+						if time.Since(client.LastSeen) > 3*time.Minute {
+							clientsToRemove = append(clientsToRemove, client)
+						}
+					}
+					rateLimiter.activeClients.mu.Unlock()
+
+					for _, v := range clientsToRemove {
+						rateLimiter.removeActiveClient(v)
+					}
 				}
 			}
 		}
@@ -76,15 +115,15 @@ func NewRateLimiter(
 
 func (r *RateLimiter) loadActiveClients() {
 
-	fmt.Println("Loading active clients...")
+	log.Println("Loading active clients...")
 
 	activeClients, err := r.Repository.GetActiveClients()
 	if err != nil {
-		fmt.Println("Error loading active clients. Starting clean.", err)
+		log.Println("Error loading active clients. Starting clean.", err)
 		activeClients = make(map[string]entity.ActiveClient)
 	}
 
-	fmt.Printf("%d active clients loaded\n", len(activeClients))
+	log.Printf("%d active clients loaded\n", len(activeClients))
 
 	// populate limiters
 	for k := range activeClients {
@@ -112,13 +151,24 @@ func (r *RateLimiter) loadActiveClients() {
 
 func (r *RateLimiter) saveActiveClients() {
 
-	err := r.Repository.SaveActiveClients(r.activeClients.clients)
+	r.activeClients.mu.Lock()
+	activeClients := make(map[string]entity.ActiveClient, len(r.activeClients.clients))
+
+	for k, v := range r.activeClients.clients {
+		activeClients[k] = v
+	}
+	r.activeClients.mu.Unlock()
+
+	log.Println("Saving active clients...", activeClients)
+	err := r.Repository.SaveActiveClients(activeClients)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func (r *RateLimiter) addActiveClient(client entity.ActiveClient) {
+
+	log.Println("Adding active client", client)
 
 	r.activeClients.mu.Lock()
 	r.activeClients.clients[client.ClientId] = client
@@ -129,6 +179,8 @@ func (r *RateLimiter) addActiveClient(client entity.ActiveClient) {
 
 func (r *RateLimiter) removeActiveClient(client entity.ActiveClient) {
 
+	log.Println("Removing active client", client)
+
 	r.activeClients.mu.Lock()
 	delete(r.activeClients.clients, client.ClientId)
 	r.activeClients.mu.Unlock()
@@ -136,9 +188,25 @@ func (r *RateLimiter) removeActiveClient(client entity.ActiveClient) {
 	r.saveActiveClients()
 }
 
-func (r *RateLimiter) updateActiveClient(key string, client entity.ActiveClient) {
+func (r *RateLimiter) updateActiveClient(client entity.ActiveClient) {
+
+	log.Println("Updating active client", client)
 
 	r.activeClients.mu.Lock()
+	r.activeClients.clients[client.ClientId] = client
+	r.activeClients.mu.Unlock()
+
+	r.saveActiveClients()
+}
+
+func (r *RateLimiter) unblockActiveClient(key string) {
+
+	log.Println("Unblocking active client", key)
+
+	r.activeClients.mu.Lock()
+	client := r.activeClients.clients[key]
+	client.Blocked = false
+	client.BlockedUntil = time.Time{}
 	r.activeClients.clients[key] = client
 	r.activeClients.mu.Unlock()
 
@@ -152,31 +220,39 @@ func (r *RateLimiter) Allow(ipAddr string, apiKeyHeader string) bool {
 		tokenMaxReqsPerSecond, ok := r.Configs.TokenConfigs[apiKeyHeader]
 		if ok {
 
-			fmt.Println("tokenMaxReqsPerSecond", tokenMaxReqsPerSecond)
+			log.Println("tokenMaxReqsPerSecond", tokenMaxReqsPerSecond)
 			return r.verifyClientAllowed(apiKeyHeader, entity.Token, tokenMaxReqsPerSecond)
 		}
 	}
 
 	ipMaxReqsPerSecond := r.Configs.IpMaxReqsPerSecond
-	fmt.Println("ipMaxReqsPerSecond", ipMaxReqsPerSecond)
+	log.Println("ipMaxReqsPerSecond", ipMaxReqsPerSecond)
 	return r.verifyClientAllowed(ipAddr, entity.Ip, ipMaxReqsPerSecond)
 }
 
 func (r *RateLimiter) verifyClientAllowed(id string, clientType entity.ClientType, maxReqsPerSecond int) bool {
+	log.Println("verifyClientAllowed", id)
 
+	r.activeClients.mu.Lock()
 	activeClient, exists := r.activeClients.clients[id]
+	r.activeClients.mu.Unlock()
 
 	if !exists {
 		activeClient = createActiveClient(id, clientType, maxReqsPerSecond)
 		r.addActiveClient(activeClient)
-		return true
+		log.Println("Active clients: ", r.activeClients.clients)
+		allow := activeClient.Limiter.Allow()
+		log.Println("Allow", allow)
+		return allow
 	}
+
+	log.Println("Existing active client", activeClient)
 
 	activeClient.LastSeen = time.Now()
 
 	if activeClient.Blocked {
-		fmt.Println("Client is blocked until", activeClient.BlockedUntil)
-		r.updateActiveClient(activeClient.ClientId, activeClient)
+		log.Println("Client is blocked until", activeClient.BlockedUntil)
+		r.updateActiveClient(activeClient)
 		return false
 	}
 
@@ -185,11 +261,12 @@ func (r *RateLimiter) verifyClientAllowed(id string, clientType entity.ClientTyp
 	if !allow {
 		activeClient.Blocked = true
 		activeClient.BlockedUntil = time.Now().Add(r.Configs.BlockingDuration)
-		fmt.Printf("Blocking client %s until %s\n", activeClient.ClientId, activeClient.BlockedUntil)
+		log.Printf("Blocking client %s until %s\n", activeClient.ClientId, activeClient.BlockedUntil)
 	}
 
-	r.updateActiveClient(activeClient.ClientId, activeClient)
+	r.updateActiveClient(activeClient)
 
+	log.Println("Allow", allow)
 	return allow
 }
 
