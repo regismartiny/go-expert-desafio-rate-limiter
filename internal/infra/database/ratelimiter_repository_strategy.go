@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/go-redis/redis/v8"
@@ -13,6 +14,8 @@ func RateLimiterRepositoryStrategy(ctx context.Context, configs config.Persisten
 	switch database {
 	case "redis":
 		repository = NewRateLimiterRedisRepository(ctx, getRedisClient(ctx, configs))
+	case "sqlite":
+		repository = NewRateLimiterSQLiteRepository(ctx, getSQLiteClient())
 	default:
 		repository = NewRateLimiterRedisRepository(ctx, getRedisClient(ctx, configs))
 	}
@@ -33,4 +36,12 @@ func getRedisClient(ctx context.Context, configs config.PersistenceConfigs) *red
 	fmt.Println("Redis connected", pong)
 
 	return redisClient
+}
+
+func getSQLiteClient() *sql.DB {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	return db
 }
