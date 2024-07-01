@@ -58,7 +58,33 @@ O objetivo deste desafio é criar um rate limiter em Go que possa ser utilizado 
 docker-compose up
 ````
 
+## Configuração
+
+Para configurar os parâmetros do Rate Limiter, é necessário alterar o arquivo config.yaml, que está no diretório **cmd/server**.
+
+A configuração padrão permite 2 requisições por segundo por IP(**ipMaxReqsPerSecond**). E o tempo de bloqueio de 30s(**blockingDuration**) inicia quando o limite de req/s é atingido pelo IP ou pelo Token informado na requisição através do header API_KEY.
+
+
+O tipo do valor do campo **blockingDuration** é Duration.
+
+As configurações de token(**tokenConfigs**) sobrescrevem a configuração **ipMaxReqsPerSecond**. Para adicionar configurações específicas de token, basta adicionar o token e o limite de req/s conforme exemplo abaixo:
+
+```
+rateLimiter:
+  blockingDuration: 30s
+  ipMaxReqsPerSecond: 2
+  tokenConfigs:
+  # token: maxReqsPerSecond
+    - 'abc123': 2
+    - 'abc321': 3
+```
+
+É possível verificar o diretório **api/** onde estão alguns exemplos de requisições.
+
+
 ### Execução de testes
+
+Os testes são executados em memória, utilizando o sqlite. Execute o comando abaixo:
 
 ```bash
 go test ./... -failfast -race -count 1
