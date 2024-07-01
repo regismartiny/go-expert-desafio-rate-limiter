@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 
 	"github.com/go-redis/redis/v8"
@@ -23,14 +22,14 @@ func (r *RateLimiterRedisRepository) SaveActiveClients(clients map[string]entity
 
 	value, err := json.Marshal(clients)
 	if err != nil {
-		fmt.Println("Error marshalling clients to JSON", err)
+		log.Println("Error marshalling clients to JSON", err)
 		return err
 	}
 
 	for _, client := range clients {
 		err = r.client.Set(r.ctx, client.ClientId, value, 0).Err()
 		if err != nil {
-			fmt.Println("Error saving active client to Redis", err)
+			log.Println("Error saving active client to Redis", err)
 		}
 	}
 
